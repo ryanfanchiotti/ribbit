@@ -1,4 +1,8 @@
 mod syntax;
+mod check;
+mod var;
+mod constraint;
+
 use std::env::{args};
 use std::fs;
 use std::process::ExitCode;
