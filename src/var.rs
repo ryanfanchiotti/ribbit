@@ -31,10 +31,6 @@ impl BvVar {
         BvVar {name, sort, display: false}
     }
 
-    pub fn sig_eq(fst: &BvVar, snd: &BvVar) -> bool {
-        fst.sort == snd.sort
-    }
-
     pub fn get_sort(&self) -> &Sort {
         &self.sort
     }

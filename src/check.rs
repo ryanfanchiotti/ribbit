@@ -58,7 +58,10 @@ impl fmt::Display for State {
 
 pub fn create_clauses(state: &mut State, prog: Program) {
     for expr in prog {
-        create_clauses_expr(state, expr);
+        let bv = create_clauses_expr(state, expr);
+        if *bv.get_sort() != Sort::Unit {
+            panic!("one or more top level expressions doesn't return unit:\n{:?}", bv);
+        }
     }
 }
 
@@ -96,8 +99,50 @@ pub fn create_clauses_list(state: &mut State, lst: Vec<Expr>) -> BvVar {
 pub fn create_clauses_fun_bvs(state: &mut State, name: String, args: Vec<BvVar>) -> BvVar {
     // here, we expect all args to be proper bit-vector variables, since we create a new
     // variable at each stage
-    let temp = state.mk_temp_bv(Sort::Unit);
-    temp
+    match name.as_str() {
+        "assert" => {
+            let temp = state.mk_temp_bv(Sort::Unit);
+            expect_vec_bv_size(&args, &vec![1], "assert");
+            state.clauses.push(vec![PropVar::new(temp.get_name().clone(), 0, true)]);
+            temp
+        },
+        "eq" => {
+            let size = expect_all_bv_size(&args, "eq");
+            let temp = state.mk_temp_bv(Sort::BitVec(1));
+            temp
+        },
+        "neq" => {
+            let size = expect_all_bv_size(&args, "neq");
+            let temp = state.mk_temp_bv(Sort::BitVec(1));
+            temp
+        },
+        "lt" => {
+            let size = expect_all_bv_size(&args, "lt");
+            let temp = state.mk_temp_bv(Sort::BitVec(1));
+            temp
+        },
+        "gt" => {
+            let size = expect_all_bv_size(&args, "gt");
+            let temp = state.mk_temp_bv(Sort::BitVec(1));
+            temp
+        },
+        "leq" => {
+            let size = expect_all_bv_size(&args, "leq");
+            let temp = state.mk_temp_bv(Sort::BitVec(1));
+            temp
+        },
+        "geq" => {
+            let size = expect_all_bv_size(&args, "geq");
+            let temp = state.mk_temp_bv(Sort::BitVec(1));
+            temp
+        },
+        "bv-and" => {
+            let size = expect_all_bv_size(&args, "bv-and");
+            let temp = state.mk_temp_bv(Sort::BitVec(size));
+            temp
+        }
+        _ => panic!("unknown function {}\n", name)
+    }
 }
 
 pub fn create_clauses_to_bv(state: &mut State, num: u128, size: u128) -> BvVar {
@@ -118,7 +163,9 @@ pub fn create_clauses_decl_fun(state: &mut State, name: String, sig: Vec<u128>) 
 }
 
 pub fn create_clauses_decl_var(state: &mut State, name: String, size: u128) -> BvVar {
-    state.mk_bv(name, Sort::BitVec(size), true)
+    state.mk_bv(name, Sort::BitVec(size), true);
+    // we need to return unit here, as well (so that declarations must be top-level)
+    state.mk_temp_bv(Sort::Unit)
 }
 
 fn lookup_var(state: &mut State, name: String) -> BvVar {
@@ -137,35 +184,35 @@ fn get_int(expr: Expr, loc: &str) -> u128 {
 
 // we know a built-in needs the same size operands, ensure this is the case
 // and return the size if found, else panic
-fn expect_all_bv_size(lst: &Vec<BvVar>) -> u128 {
+fn expect_all_bv_size(lst: &Vec<BvVar>, loc: &str) -> u128 {
     let mut cur_size: Option<u128> = None;
-    let msg = "all arguments to built-ins must be the same size\n";
+    let die = || panic!("all arguments to {} must be of the same bit-width\n", loc);
 
     for var in lst {
         match var.get_sort() {
             Sort::BitVec(n) => {
                 if *cur_size.get_or_insert(*n) != *n {
-                    panic!("{}", msg)
+                    die()
                 }
             }
-            _ => panic!("{}", msg)
+            _ => die()
         }
     }
-    cur_size.expect(msg)
+    cur_size.unwrap_or_else(|| {die(); 0})
 }
 
 // similar to above, but with a specified list of sizes
-fn expect_vec_bv_size(lst: &Vec<BvVar>, sizes: &Vec<u128>, loc: &str) {
+fn expect_vec_bv_size(lst: &[BvVar], sizes: &[u128], loc: &str) {
+    let die = || panic!("arguments to {} must be of sizes {:?}:\n{:?}", loc, sizes, lst);
+    
     if lst.len() != sizes.len() {
-        panic!("arguments to {} must be of sizes {:?}\n", loc, sizes)
+        die()
     }
 
     for (bv, s) in lst.iter().zip(sizes.iter()) {
         match bv.get_sort() {
-            Sort::BitVec(n) if n != s => 
-                panic!("arguments to {} must be of sizes {:?}\n", loc, sizes),
-            Sort::Unit =>
-                panic!("arguments to {} must be of sizes {:?}\n", loc, sizes),
+            Sort::BitVec(n) if n != s => die(),
+            Sort::Unit => die(),
             _ => continue
         }
     }
