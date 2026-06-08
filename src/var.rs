@@ -11,7 +11,7 @@ static NEXT_VAR: AtomicUsize = AtomicUsize::new(0);
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Sort {
     Unit, // for declare-bv-fun, ...
-    BitVec(i128), // for fixed size bit-vectors, such as 1-bit booleans
+    BitVec(u128), // for fixed size bit-vectors, such as 1-bit booleans
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -37,6 +37,10 @@ impl BvVar {
 
     pub fn get_sort(&self) -> &Sort {
         &self.sort
+    }
+
+    pub fn get_name(&self) -> &String {
+        &self.name
     }
 }
 

@@ -6,7 +6,7 @@ use nom::{
     multi::{many0_count, many1},
     bytes::complete::tag,
     sequence::{delimited, pair},
-    character::complete::{char, i128, multispace0, alpha1, alphanumeric1},
+    character::complete::{char, u128, multispace0, alpha1, alphanumeric1},
     combinator::recognize,
 };
 
@@ -14,7 +14,7 @@ use nom::{
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Expr {
     Var(String),
-    Int(i128),
+    Int(u128),
     List(Vec<Expr>)
 }
 
@@ -32,7 +32,7 @@ where
 }
 
 pub fn parse_int(input: &str) -> IResult<&str, Expr> {
-    whitespace(i128).map(|n| Expr::Int(n)).parse(input)
+    whitespace(u128).map(|n| Expr::Int(n)).parse(input)
 }
 
 pub fn other_ident_char(input: &str) -> IResult<&str, &str> {
