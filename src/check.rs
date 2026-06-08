@@ -2,6 +2,7 @@ use crate::var::*;
 use crate::syntax::*;
 
 use std::collections::HashMap;
+use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PropVar {
@@ -30,6 +31,25 @@ pub struct State {
 impl State {
     pub fn new() -> Self {
         Self {clauses: vec![], vars: HashMap::new(), fun_insts: HashMap::new()}
+    }
+
+    pub fn mk_bv(&mut self, name: String, sort: Sort, display: bool) -> BvVar {
+        let bv = BvVar::new(name.clone(), sort, display);
+        self.vars.insert(name, bv.clone());
+        bv
+    }
+
+    pub fn mk_temp_bv(&mut self, sort: Sort) -> BvVar {
+        let bv = BvVar::new_temp(sort);
+        self.vars.insert(bv.get_name().clone(), bv.clone());
+        bv
+    }
+}
+
+impl fmt::Display for State {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "clauses:\n{:?}\nvars:\n{:?}\nfun_insts:\n{:?}", 
+            self.clauses, self.vars, self.fun_insts)
     }
 }
 
@@ -76,12 +96,12 @@ pub fn create_clauses_list(state: &mut State, lst: Vec<Expr>) -> BvVar {
 pub fn create_clauses_fun_bvs(state: &mut State, name: String, args: Vec<BvVar>) -> BvVar {
     // here, we expect all args to be proper bit-vector variables, since we create a new
     // variable at each stage
-    let temp = BvVar::new_temp(Sort::Unit);
+    let temp = state.mk_temp_bv(Sort::Unit);
     temp
 }
 
 pub fn create_clauses_to_bv(state: &mut State, num: u128, size: u128) -> BvVar {
-    let temp = BvVar::new_temp(Sort::BitVec(size));
+    let temp = state.mk_temp_bv(Sort::BitVec(size));
     // for each bit in the vector, we push a clause (which must be true, in CNF) asserting
     // that it must be true if that bit is set and false otherwise
     for i in 0 .. size {
@@ -94,13 +114,11 @@ pub fn create_clauses_to_bv(state: &mut State, num: u128, size: u128) -> BvVar {
 
 pub fn create_clauses_decl_fun(state: &mut State, name: String, sig: Vec<u128>) -> BvVar {
     state.fun_insts.insert(name, (vec![], sig));
-    BvVar::new_temp(Sort::Unit)
+    state.mk_temp_bv(Sort::Unit)
 }
 
 pub fn create_clauses_decl_var(state: &mut State, name: String, size: u128) -> BvVar {
-    let temp = BvVar::new(name.clone(), Sort::Unit, true);
-    state.vars.insert(name, temp);
-    BvVar::new_temp(Sort::Unit)
+    state.mk_bv(name, Sort::BitVec(size), true)
 }
 
 fn lookup_var(state: &mut State, name: String) -> BvVar {

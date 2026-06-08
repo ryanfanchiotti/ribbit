@@ -1,11 +1,13 @@
 mod syntax;
 mod check;
 mod var;
-mod constraint;
+mod sat;
 
 use std::env::{args};
 use std::fs;
 use std::process::ExitCode;
+
+use crate::check::*;
 
 fn main() -> ExitCode {
     let args: Vec<String> = args().collect();
@@ -20,6 +22,9 @@ fn main() -> ExitCode {
     match syntax::parse_program(input.as_str()) {
         Ok((_, program)) => {
             println!("program:\n{:?}", program);
+            let mut state = State::new();
+            create_clauses(&mut state, program);
+            println!("state:\n{}", state);
             return ExitCode::SUCCESS;
         }
         Err(e) => {
