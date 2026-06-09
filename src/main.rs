@@ -22,14 +22,13 @@ fn main() -> ExitCode {
     match syntax::parse_program(input.as_str()) {
         Ok((_, program)) => {
             println!("program:\n{:?}", program);
-            let mut state = State::new();
-            create_clauses(&mut state, program);
-            println!("state:\n{}", state);
-            return ExitCode::SUCCESS;
+            let clauses = make_clauses(program);
+            println!("clauses:\n{:?}", clauses);
+            ExitCode::SUCCESS
         }
         Err(e) => {
             println!("parse error:\n{:?}", e);
-            return ExitCode::FAILURE;
+            ExitCode::FAILURE
         }
     }
 }

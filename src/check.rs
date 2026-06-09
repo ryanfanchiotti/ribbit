@@ -56,96 +56,114 @@ impl fmt::Display for State {
 // implementation of Tseitin's transformation, where new variables are made for
 // each expression (instead of using distributive laws, etc)
 
-pub fn create_clauses(state: &mut State, prog: Program) {
+pub fn make_clauses(prog: Program) -> Vec<Clause> {
+    let mut state = State::new();
     for expr in prog {
-        let bv = create_clauses_expr(state, expr);
+        let bv = add_clauses_expr(&mut state, expr);
         if *bv.get_sort() != Sort::Unit {
             panic!("one or more top level expressions doesn't return unit:\n{:?}", bv);
         }
     }
+    state.clauses
 }
 
-pub fn create_clauses_expr(state: &mut State, expr: Expr) -> BvVar {
+fn add_clauses_expr(state: &mut State, expr: Expr) -> BvVar {
     match expr {
         Expr::Var(name) => lookup_var(state, name),
-        Expr::List(lst) => create_clauses_list(state, lst),
+        Expr::List(lst) => add_clauses_list(state, lst),
         _ => panic!("bad expr in create_clause, likely lone num: {:?}\n", expr)
     }
 }
 
-pub fn create_clauses_list(state: &mut State, lst: Vec<Expr>) -> BvVar {
+fn add_clauses_list(state: &mut State, lst: Vec<Expr>) -> BvVar {
     match &lst[..] {
         // slightly hacky method of dealing with our primitives that need literal ints, to save space
         [Expr::Var(n), Expr::Int(num), Expr::Int(size)] if *n == "to-bv".to_string() =>
-            create_clauses_to_bv(state, *num, *size),
+            add_clauses_to_bv(state, *num, *size),
         // const function -> normal variable
         [Expr::Var(n), Expr::Var(name), Expr::Int(size)] if *n == "declare-bv-fun".to_string() =>
-            create_clauses_decl_var(state, name.clone(), *size),
+            add_clauses_decl_var(state, name.clone(), *size),
         [Expr::Var(n), Expr::Var(name), rest @ ..] if *n == "declare-bv-fun".to_string() =>
-            create_clauses_decl_fun(
+            add_clauses_decl_fun(
                 state,
                 name.clone(),
                 rest.into_iter()
                     .map(|e| get_int(e.clone(), "types in func decl"))
                     .collect()),
         [Expr::Var(n), rest @ ..] => {
-            let bvs: Vec<BvVar> = rest.into_iter().map(|e| create_clauses_expr(state, e.clone())).collect();
-            create_clauses_fun_bvs(state, n.clone(), bvs)
+            let bvs: Vec<BvVar> = rest.into_iter().map(|e| add_clauses_expr(state, e.clone())).collect();
+            add_clauses_fun_bvs(state, n.clone(), bvs)
         },
         _ => panic!("unknown list expr: {:?}", lst)
     }
 }
 
-pub fn create_clauses_fun_bvs(state: &mut State, name: String, args: Vec<BvVar>) -> BvVar {
+fn add_clauses_fun_bvs(state: &mut State, name: String, args: Vec<BvVar>) -> BvVar {
     // here, we expect all args to be proper bit-vector variables, since we create a new
     // variable at each stage
     match name.as_str() {
-        "assert" => {
-            let temp = state.mk_temp_bv(Sort::Unit);
-            expect_vec_bv_size(&args, &vec![1], "assert");
-            state.clauses.push(vec![PropVar::new(temp.get_name().clone(), 0, true)]);
-            temp
-        },
-        "eq" => {
-            let size = expect_all_bv_size(&args, "eq");
-            let temp = state.mk_temp_bv(Sort::BitVec(1));
-            temp
-        },
-        "neq" => {
-            let size = expect_all_bv_size(&args, "neq");
-            let temp = state.mk_temp_bv(Sort::BitVec(1));
-            temp
-        },
-        "lt" => {
-            let size = expect_all_bv_size(&args, "lt");
-            let temp = state.mk_temp_bv(Sort::BitVec(1));
-            temp
-        },
-        "gt" => {
-            let size = expect_all_bv_size(&args, "gt");
-            let temp = state.mk_temp_bv(Sort::BitVec(1));
-            temp
-        },
-        "leq" => {
-            let size = expect_all_bv_size(&args, "leq");
-            let temp = state.mk_temp_bv(Sort::BitVec(1));
-            temp
-        },
-        "geq" => {
-            let size = expect_all_bv_size(&args, "geq");
-            let temp = state.mk_temp_bv(Sort::BitVec(1));
-            temp
-        },
-        "bv-and" => {
-            let size = expect_all_bv_size(&args, "bv-and");
-            let temp = state.mk_temp_bv(Sort::BitVec(size));
-            temp
-        }
+        "assert" => add_clauses_assert(state, args),
+        "eq" => add_clauses_eq(state, args),
+        "neq" => add_clauses_neq(state, args),
+        "lt" => add_clauses_lt(state, args),
+        "gt" => add_clauses_gt(state, args),
+        "leq" => add_clauses_leq(state, args),
+        "geq" => add_clauses_geq(state, args),
+        "bv-and" => add_clauses_bv_and(state, args),
         _ => panic!("unknown function {}\n", name)
     }
 }
 
-pub fn create_clauses_to_bv(state: &mut State, num: u128, size: u128) -> BvVar {
+fn add_clauses_assert(state: &mut State, args: Vec<BvVar>) -> BvVar {
+    let temp = state.mk_temp_bv(Sort::Unit);
+    expect_vec_bv_size(&args, &vec![1], "assert");
+    state.clauses.push(vec![PropVar::new(temp.get_name().clone(), 0, true)]);
+    temp
+}
+
+fn add_clauses_eq(state: &mut State, args: Vec<BvVar>) -> BvVar {
+    let _ = expect_all_bv_size(&args, "eq");
+    let temp = state.mk_temp_bv(Sort::BitVec(1));
+    temp
+}
+
+fn add_clauses_neq(state: &mut State, args: Vec<BvVar>) -> BvVar {
+    let _ = expect_all_bv_size(&args, "neq");
+    let temp = state.mk_temp_bv(Sort::BitVec(1));
+    temp
+}
+
+fn add_clauses_lt(state: &mut State, args: Vec<BvVar>) -> BvVar {
+    let _ = expect_all_bv_size(&args, "lt");
+    let temp = state.mk_temp_bv(Sort::BitVec(1));
+    temp
+}
+
+fn add_clauses_leq(state: &mut State, args: Vec<BvVar>) -> BvVar {
+    let _ = expect_all_bv_size(&args, "leq");
+    let temp = state.mk_temp_bv(Sort::BitVec(1));
+    temp
+}
+
+fn add_clauses_gt(state: &mut State, args: Vec<BvVar>) -> BvVar {
+    let _ = expect_all_bv_size(&args, "gt");
+    let temp = state.mk_temp_bv(Sort::BitVec(1));
+    temp
+}
+
+fn add_clauses_geq(state: &mut State, args: Vec<BvVar>) -> BvVar {
+    let _ = expect_all_bv_size(&args, "geq");
+    let temp = state.mk_temp_bv(Sort::BitVec(1));
+    temp
+}
+
+fn add_clauses_bv_and(state: &mut State, args: Vec<BvVar>) -> BvVar {
+    let size = expect_all_bv_size(&args, "bv-and");
+    let temp = state.mk_temp_bv(Sort::BitVec(size));
+    temp
+}
+
+fn add_clauses_to_bv(state: &mut State, num: u128, size: u128) -> BvVar {
     let temp = state.mk_temp_bv(Sort::BitVec(size));
     // for each bit in the vector, we push a clause (which must be true, in CNF) asserting
     // that it must be true if that bit is set and false otherwise
@@ -157,12 +175,12 @@ pub fn create_clauses_to_bv(state: &mut State, num: u128, size: u128) -> BvVar {
     temp
 }
 
-pub fn create_clauses_decl_fun(state: &mut State, name: String, sig: Vec<u128>) -> BvVar {
+fn add_clauses_decl_fun(state: &mut State, name: String, sig: Vec<u128>) -> BvVar {
     state.fun_insts.insert(name, (vec![], sig));
     state.mk_temp_bv(Sort::Unit)
 }
 
-pub fn create_clauses_decl_var(state: &mut State, name: String, size: u128) -> BvVar {
+fn add_clauses_decl_var(state: &mut State, name: String, size: u128) -> BvVar {
     state.mk_bv(name, Sort::BitVec(size), true);
     // we need to return unit here, as well (so that declarations must be top-level)
     state.mk_temp_bv(Sort::Unit)
