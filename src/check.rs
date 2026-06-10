@@ -41,7 +41,7 @@ impl State {
 
     pub fn mk_temp_bv(&mut self, sort: Sort) -> BvVar {
         let bv = BvVar::new_temp(sort);
-        self.vars.insert(bv.get_name().clone(), bv.clone());
+        self.vars.insert(bv.owned_name(), bv.clone());
         bv
     }
 }
@@ -53,7 +53,7 @@ impl fmt::Display for State {
     }
 }
 
-// implementation of Tseitin's transformation, where new variables are made for
+// implementation of Tseytin's transformation, where new variables are made for
 // each expression (instead of using distributive laws, etc)
 
 pub fn make_clauses(prog: Program) -> Vec<Clause> {
@@ -117,14 +117,37 @@ fn add_clauses_fun_bvs(state: &mut State, name: String, args: Vec<BvVar>) -> BvV
 fn add_clauses_assert(state: &mut State, args: Vec<BvVar>) -> BvVar {
     let temp = state.mk_temp_bv(Sort::Unit);
     expect_vec_bv_size(&args, &vec![1], "assert");
-    state.clauses.push(vec![PropVar::new(temp.get_name().clone(), 0, true)]);
+    state.clauses.push(vec![PropVar::new(temp.owned_name(), 0, true)]);
     temp
 }
 
 fn add_clauses_eq(state: &mut State, args: Vec<BvVar>) -> BvVar {
-    let _ = expect_all_bv_size(&args, "eq");
-    let temp = state.mk_temp_bv(Sort::BitVec(1));
-    temp
+    let size = expect_all_bv_size(&args, "eq");
+    // stores equality for each bit
+    let helper = state.mk_temp_bv(Sort::BitVec(size));
+    let res = state.mk_temp_bv(Sort::BitVec(1));
+    let arg1 = &args[0];
+    let arg2 = &args[1];
+    let combos = [ (false, true, true), (true, false, true)
+                 , (true, true, false), (false, false, false) ];
+    let mut negated_helpers: Clause = vec![PropVar::new(res.owned_name(), 0, true)];
+    for i in 0 .. size {
+        for (b1, b2, b3) in combos {
+            state.clauses.push(vec![
+                PropVar::new(arg1.owned_name(), i, b1),
+                PropVar::new(arg2.owned_name(), i, b2),
+                PropVar::new(helper.owned_name(), i, b3)
+            ]);
+        }
+        // we need to force res to be false if any helper bit is false
+        state.clauses.push(vec![
+            PropVar::new(helper.owned_name(), i, true),
+            PropVar::new(res.owned_name(), 0, false)
+        ]);
+        negated_helpers.push(PropVar::new(helper.owned_name(), i, false))
+    }
+    state.clauses.push(negated_helpers);
+    res
 }
 
 fn add_clauses_neq(state: &mut State, args: Vec<BvVar>) -> BvVar {
@@ -169,7 +192,7 @@ fn add_clauses_to_bv(state: &mut State, num: u128, size: u128) -> BvVar {
     // that it must be true if that bit is set and false otherwise
     for i in 0 .. size {
         state.clauses.push(
-            vec![PropVar::new(temp.get_name().clone(), i, get_bit(num, i))]
+            vec![PropVar::new(temp.owned_name(), i, get_bit(num, i))]
         )
     }
     temp

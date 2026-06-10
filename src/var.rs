@@ -35,8 +35,8 @@ impl BvVar {
         &self.sort
     }
 
-    pub fn get_name(&self) -> &String {
-        &self.name
+    pub fn owned_name(&self) -> String {
+        self.name.clone()
     }
 }
 

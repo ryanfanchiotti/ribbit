@@ -1,0 +1,3 @@
+(declare-bv-fun x 32)
+
+(assert (eq x (to-bv 42 32)))
