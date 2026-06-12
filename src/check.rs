@@ -1,25 +1,13 @@
-use crate::var::*;
+use crate::vars::*;
 use crate::syntax::*;
 
 use std::collections::HashMap;
 use std::fmt;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct PropVar {
-    name: String,
-    offset: u128,
-    value: bool
-}
-
-impl PropVar {
-    pub fn new(name: String, offset: u128, value: bool) -> Self {
-        PropVar {name, offset, value}
-    }
-}
-
 // disjunction of each variable (or bit, here)
 pub type Clause = Vec<PropVar>;
 
+// state for checking types, adding clauses, etc
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct State {
     clauses: Vec<Clause>,
@@ -56,7 +44,7 @@ impl fmt::Display for State {
 // implementation of Tseytin's transformation, where new variables are made for
 // each expression (instead of using distributive laws, etc)
 
-pub fn make_clauses(prog: Program) -> Vec<Clause> {
+pub fn make_clauses(prog: Program) -> (Vec<Clause>, Vec<BvVar>) {
     let mut state = State::new();
     for expr in prog {
         let bv = add_clauses_expr(&mut state, expr);
@@ -64,7 +52,7 @@ pub fn make_clauses(prog: Program) -> Vec<Clause> {
             panic!("one or more top level expressions doesn't return unit:\n{:?}", bv);
         }
     }
-    state.clauses
+    (state.clauses, state.vars.into_values().collect())
 }
 
 fn add_clauses_expr(state: &mut State, expr: Expr) -> BvVar {
@@ -117,19 +105,19 @@ fn add_clauses_fun_bvs(state: &mut State, name: String, args: Vec<BvVar>) -> BvV
 fn add_clauses_assert(state: &mut State, args: Vec<BvVar>) -> BvVar {
     let temp = state.mk_temp_bv(Sort::Unit);
     expect_vec_bv_size(&args, &vec![1], "assert");
-    state.clauses.push(vec![PropVar::new(temp.owned_name(), 0, true)]);
+    state.clauses.push(vec![PropVar::new(args[0].owned_name(), 0, true)]);
     temp
 }
 
 fn add_clauses_eq(state: &mut State, args: Vec<BvVar>) -> BvVar {
-    let size = expect_all_bv_size(&args, "eq");
+    let size = expect_all_bv_size(&args, 2, "eq");
     // stores equality for each bit
     let helper = state.mk_temp_bv(Sort::BitVec(size));
     let res = state.mk_temp_bv(Sort::BitVec(1));
     let arg1 = &args[0];
     let arg2 = &args[1];
-    let combos = [ (false, true, true), (true, false, true)
-                 , (true, true, false), (false, false, false) ];
+    let combos = [ (false, true, false), (true, false, false)
+                 , (true, true, true), (false, false, true) ];
     let mut negated_helpers: Clause = vec![PropVar::new(res.owned_name(), 0, true)];
     for i in 0 .. size {
         for (b1, b2, b3) in combos {
@@ -151,37 +139,37 @@ fn add_clauses_eq(state: &mut State, args: Vec<BvVar>) -> BvVar {
 }
 
 fn add_clauses_neq(state: &mut State, args: Vec<BvVar>) -> BvVar {
-    let _ = expect_all_bv_size(&args, "neq");
+    let _ = expect_all_bv_size(&args, 2, "neq");
     let temp = state.mk_temp_bv(Sort::BitVec(1));
     temp
 }
 
 fn add_clauses_lt(state: &mut State, args: Vec<BvVar>) -> BvVar {
-    let _ = expect_all_bv_size(&args, "lt");
+    let _ = expect_all_bv_size(&args, 2, "lt");
     let temp = state.mk_temp_bv(Sort::BitVec(1));
     temp
 }
 
 fn add_clauses_leq(state: &mut State, args: Vec<BvVar>) -> BvVar {
-    let _ = expect_all_bv_size(&args, "leq");
+    let _ = expect_all_bv_size(&args, 2, "leq");
     let temp = state.mk_temp_bv(Sort::BitVec(1));
     temp
 }
 
 fn add_clauses_gt(state: &mut State, args: Vec<BvVar>) -> BvVar {
-    let _ = expect_all_bv_size(&args, "gt");
+    let _ = expect_all_bv_size(&args, 2, "gt");
     let temp = state.mk_temp_bv(Sort::BitVec(1));
     temp
 }
 
 fn add_clauses_geq(state: &mut State, args: Vec<BvVar>) -> BvVar {
-    let _ = expect_all_bv_size(&args, "geq");
+    let _ = expect_all_bv_size(&args, 2, "geq");
     let temp = state.mk_temp_bv(Sort::BitVec(1));
     temp
 }
 
 fn add_clauses_bv_and(state: &mut State, args: Vec<BvVar>) -> BvVar {
-    let size = expect_all_bv_size(&args, "bv-and");
+    let size = expect_all_bv_size(&args, 2, "bv-and");
     let temp = state.mk_temp_bv(Sort::BitVec(size));
     temp
 }
@@ -225,9 +213,13 @@ fn get_int(expr: Expr, loc: &str) -> u128 {
 
 // we know a built-in needs the same size operands, ensure this is the case
 // and return the size if found, else panic
-fn expect_all_bv_size(lst: &Vec<BvVar>, loc: &str) -> u128 {
+fn expect_all_bv_size(lst: &Vec<BvVar>, len: usize, loc: &str) -> u128 {
     let mut cur_size: Option<u128> = None;
     let die = || panic!("all arguments to {} must be of the same bit-width\n", loc);
+
+    if lst.len() != len {
+        panic!("{} expects {} arguments\n", loc, len)
+    }
 
     for var in lst {
         match var.get_sort() {

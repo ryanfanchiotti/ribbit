@@ -35,6 +35,10 @@ impl BvVar {
         &self.sort
     }
 
+    pub fn get_display(&self) -> bool {
+        self.display
+    }
+
     pub fn owned_name(&self) -> String {
         self.name.clone()
     }
@@ -53,4 +57,29 @@ pub fn fresh_id() -> usize {
 pub fn fresh_name() -> String {
     let id = fresh_id();
     format!("fresh_name_{}", id)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PropVar {
+    name: String,
+    offset: u128,
+    value: bool
+}
+
+impl PropVar {
+    pub fn new(name: String, offset: u128, value: bool) -> Self {
+        PropVar {name, offset, value}
+    }
+
+    pub fn owned_name(&self) -> String {
+        self.name.clone()
+    }
+
+    pub fn get_offset(&self) -> u128 {
+        self.offset
+    }
+
+    pub fn get_value(&self) -> bool {
+        self.value
+    }
 }
