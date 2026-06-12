@@ -19,13 +19,11 @@ pub fn print_sat(clauses: Vec<Clause>, vars: Vec<BvVar>) {
     let mut solver = CaDiCaL::default();
 
     let mut name_to_var: HashMap<(String, u128), RSVar> = HashMap::new();
-    let mut var_to_name: HashMap<RSVar, (String, u128)> = HashMap::new();
 
     for var in &vars {
         for i in 0 .. get_bits(var.get_sort()) {
             let rs_var = instance.new_var();
             name_to_var.insert((var.owned_name(), i), rs_var);
-            var_to_name.insert(rs_var, (var.owned_name(), i));
         }
     }
 
@@ -38,15 +36,9 @@ pub fn print_sat(clauses: Vec<Clause>, vars: Vec<BvVar>) {
     let sat_res = solver.solve().expect("solver should solve formula");
 
     match sat_res {
-        SolverResult::Sat => {
-            print_model(&vars, &solver, &name_to_var)
-        },
-        SolverResult::Interrupted => {
-            println!("unknown")
-        },
-        SolverResult::Unsat => {
-            println!("unsat")
-        }
+        SolverResult::Sat => print_model(&vars, &solver, &name_to_var),
+        SolverResult::Interrupted => println!("unknown"),
+        SolverResult::Unsat => println!("unsat")
     }
 }
 
