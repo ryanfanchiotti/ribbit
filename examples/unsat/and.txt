@@ -1,0 +1,5 @@
+(declare-bv-fun x 1)
+(declare-bv-fun y 1)
+
+(assert (eq x (and y (to-bv 0 1))))
+(assert (eq x (to-bv 1 1)))

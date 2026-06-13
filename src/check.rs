@@ -32,6 +32,16 @@ impl State {
         self.vars.insert(bv.owned_name(), bv.clone());
         bv
     }
+
+    fn bulk_clause_push(&mut self, clauses: Vec<Vec<(&BvVar, u128, bool)>>) {
+        for clause in clauses {
+            let clause1 = clause
+                .into_iter()
+                .map(|(var, off, b)| PropVar::new(var.owned_name(), off, b))
+                .collect();
+            self.clauses.push(clause1)
+        }
+    }
 }
 
 impl fmt::Display for State {
@@ -98,13 +108,16 @@ fn add_clauses_fun_bvs(state: &mut State, name: String, args: Vec<BvVar>) -> BvV
         "leq" => add_clauses_leq(state, args),
         "geq" => add_clauses_geq(state, args),
         "bv-and" => add_clauses_bv_and(state, args),
+        "and" => add_clauses_and(state, args),
+        "bv-or" => add_clauses_bv_or(state, args),
+        "or" => add_clauses_or(state, args),
         _ => panic!("unknown function {}\n", name)
     }
 }
 
 fn add_clauses_assert(state: &mut State, args: Vec<BvVar>) -> BvVar {
     let temp = state.mk_temp_bv(Sort::Unit);
-    expect_vec_bv_size(&args, &vec![1], "assert");
+    expect_vec_bv_size(&args[..], &vec![1], "assert");
     state.clauses.push(vec![PropVar::new(args[0].owned_name(), 0, true)]);
     temp
 }
@@ -170,18 +183,49 @@ fn add_clauses_geq(state: &mut State, args: Vec<BvVar>) -> BvVar {
 
 fn add_clauses_bv_and(state: &mut State, args: Vec<BvVar>) -> BvVar {
     let size = expect_all_bv_size(&args, 2, "bv-and");
-    let arg1 = &args[0];
-    let arg2 = &args[1];
     let res = state.mk_temp_bv(Sort::BitVec(size));
     for i in 0 .. size {
-        state.clauses.push(vec![ PropVar::new(arg1.owned_name(), i, false)
-                               , PropVar::new(arg2.owned_name(), i, false)
-                               , PropVar::new(res.owned_name(), i, true)]);
-        state.clauses.push(vec![ PropVar::new(arg1.owned_name(), i, true)
-                               , PropVar::new(res.owned_name(), i, false)]);
-        state.clauses.push(vec![ PropVar::new(arg2.owned_name(), i, true)
-                               , PropVar::new(res.owned_name(), i, false)])
+        state.bulk_clause_push(vec![
+            vec![(&args[0], i, false), (&args[1], i, false), (&res, i, true)],
+            vec![(&args[0], i, true), (&res, i, false)],
+            vec![(&args[1], i, true), (&res, i, false)]
+        ]);
     }
+    res
+}
+
+fn add_clauses_and(state: &mut State, args: Vec<BvVar>) -> BvVar {
+    expect_vec_bv_size(&args[..], &vec![1, 1], "and");
+    let res = state.mk_temp_bv(Sort::BitVec(1));
+    state.bulk_clause_push(vec![
+        vec![(&args[0], 0, false), (&args[1], 0, false), (&res, 0, true)],
+        vec![(&args[0], 0, true), (&res, 0, false)],
+        vec![(&args[1], 0, true), (&res, 0, false)]
+    ]);
+    res
+}
+
+fn add_clauses_bv_or(state: &mut State, args: Vec<BvVar>) -> BvVar {
+    let size = expect_all_bv_size(&args, 2, "bv-or");
+    let res = state.mk_temp_bv(Sort::BitVec(size));
+    for i in 0 .. size {
+        state.bulk_clause_push(vec![
+            vec![(&args[0], i, true), (&args[1], i, true), (&res, i, false)],
+            vec![(&args[0], i, false), (&res, i, true)],
+            vec![(&args[1], i, false), (&res, i, true)]
+        ]);
+    }
+    res
+}
+
+fn add_clauses_or(state: &mut State, args: Vec<BvVar>) -> BvVar {
+    expect_vec_bv_size(&args[..], &vec![1, 1], "or");
+    let res = state.mk_temp_bv(Sort::BitVec(1));
+    state.bulk_clause_push(vec![
+        vec![(&args[0], 0, true), (&args[1], 0, true), (&res, 0, false)],
+        vec![(&args[0], 0, false), (&res, 0, true)],
+        vec![(&args[1], 0, false), (&res, 0, true)]
+    ]);
     res
 }
 
