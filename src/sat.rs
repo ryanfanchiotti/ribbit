@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use rustsat::instances::{SatInstance};
 use rustsat::solvers::{Solve, SolverResult};
 use rustsat::types::TernaryVal;
-use rustsat_cadical::CaDiCaL;
+use rustsat_kissat::Kissat;
 use rustsat::types::Var as RSVar;
 use rustsat::types::Lit as RSLit;
 use rustsat::types::Clause as RSClause;
@@ -16,7 +16,7 @@ use rustsat::types::Clause as RSClause;
 
 pub fn print_sat(clauses: Vec<Clause>, vars: Vec<BvVar>) {
     let mut instance: SatInstance = SatInstance::new();
-    let mut solver = CaDiCaL::default();
+    let mut solver = Kissat::default();
 
     let mut name_to_var: HashMap<(String, u128), RSVar> = HashMap::new();
 
@@ -36,13 +36,16 @@ pub fn print_sat(clauses: Vec<Clause>, vars: Vec<BvVar>) {
     let sat_res = solver.solve().expect("solver should solve formula");
 
     match sat_res {
-        SolverResult::Sat => print_model(&vars, &solver, &name_to_var),
+        SolverResult::Sat => {
+            println!("sat");
+            print_model(&vars, &solver, &name_to_var)
+        },
         SolverResult::Interrupted => println!("unknown"),
         SolverResult::Unsat => println!("unsat")
     }
 }
 
-fn print_model(vars: &Vec<BvVar>, solver: &rustsat_cadical::CaDiCaL, name_to_var: &HashMap<(String, u128), RSVar>) {
+fn print_model<T: Solve> (vars: &Vec<BvVar>, solver: &T, name_to_var: &HashMap<(String, u128), RSVar>) {
     for var in vars {
         if !var.get_display() {
             continue

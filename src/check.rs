@@ -170,8 +170,19 @@ fn add_clauses_geq(state: &mut State, args: Vec<BvVar>) -> BvVar {
 
 fn add_clauses_bv_and(state: &mut State, args: Vec<BvVar>) -> BvVar {
     let size = expect_all_bv_size(&args, 2, "bv-and");
-    let temp = state.mk_temp_bv(Sort::BitVec(size));
-    temp
+    let arg1 = &args[0];
+    let arg2 = &args[1];
+    let res = state.mk_temp_bv(Sort::BitVec(size));
+    for i in 0 .. size {
+        state.clauses.push(vec![ PropVar::new(arg1.owned_name(), i, false)
+                               , PropVar::new(arg2.owned_name(), i, false)
+                               , PropVar::new(res.owned_name(), i, true)]);
+        state.clauses.push(vec![ PropVar::new(arg1.owned_name(), i, true)
+                               , PropVar::new(res.owned_name(), i, false)]);
+        state.clauses.push(vec![ PropVar::new(arg2.owned_name(), i, true)
+                               , PropVar::new(res.owned_name(), i, false)])
+    }
+    res
 }
 
 fn add_clauses_to_bv(state: &mut State, num: u128, size: u128) -> BvVar {
