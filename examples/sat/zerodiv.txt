@@ -1,0 +1,6 @@
+(declare-bv-fun x 32)
+(declare-bv-fun x2 32)
+
+(assert (eq x (to-bv 0 32)))
+
+(assert (eq x2 (bv-udiv (to-bv 20 32) x)))

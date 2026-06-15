@@ -1,0 +1,11 @@
+(declare-bv-fun z 32)
+(declare-bv-fun z2 32)
+(declare-bv-fun z3 32)
+
+(assert (eq z2 (bv-mul z z)))
+(assert (eq z3 (bv-mul z2 z)))
+
+(assert (eq z2 (to-bv 49 32)))
+
+(assert (ult z (to-bv 10000 32)))
+(assert (ult z3 (to-bv 10000 32)))
