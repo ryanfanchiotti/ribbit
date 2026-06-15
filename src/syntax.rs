@@ -10,7 +10,7 @@ use nom::{
     combinator::recognize,
 };
 
-// S-expression for our lisp-like language
+// s-expression for our lisp-like language
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Expr {
     Var(String),
@@ -20,8 +20,8 @@ pub enum Expr {
 
 pub type Program = Vec<Expr>;
 
-// Whitespace eater, from the nom recipes
-// Really not sure why they didn't just implement these...?
+// whitespace eater, from the nom recipes
+// really not sure why they didn't just implement these...?
 pub fn whitespace<'a, O, E: ParseError<&'a str>, F>(
     inner: F,
 ) -> impl Parser<&'a str, Output = O, Error = E>
@@ -39,7 +39,7 @@ pub fn other_ident_char(input: &str) -> IResult<&str, &str> {
     alt((tag("-"), tag("_"))).parse(input)
 }
 
-// Identifier eater, from the nom recipes
+// identifier eater, from the nom recipes
 pub fn parse_ident(input: &str) -> IResult<&str, &str> {
   recognize(
     pair(

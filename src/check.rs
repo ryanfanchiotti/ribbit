@@ -128,6 +128,8 @@ fn add_clauses_fun_bvs(state: &mut State, name: String, args: &Vec<BvVar>) -> Bv
 
         "bv-add" => add_clauses_bv_add(state, args),
         "bv-sub" => add_clauses_bv_sub(state, args),
+        "bv-mul" => add_clauses_bv_mul(state, args),
+        "bv-udiv" => add_clauses_bv_udiv(state, args),
 
         _ => panic!("unknown function {}\n", name)
     }
@@ -293,6 +295,71 @@ fn add_clauses_bv_add_triple(state: &mut State, arg0: &BvVar, arg1: &BvVar, sum:
             vec![(arg0, i, false), (arg1, i, true), (&carry, i, true), (&carry, i + 1, false)],
             vec![(arg0, i, true), (arg1, i, true), (&carry, i, true), (&carry, i + 1, false)],
 
+        ]);
+    }
+}
+
+// we can model this by rewriting res = a / b as res * b = a - remainder,
+// where remainder is less than b
+// => res_b + rem = a 
+// also note that dividing by zero is max-int in smt-lib, so we emulate that
+fn add_clauses_bv_udiv(state: &mut State, args: &Vec<BvVar>) -> BvVar {
+    let size = expect_all_bv_size(&args[..], 2, "bv-udiv");
+    let res = state.mk_temp_bv(Sort::BitVec(size));
+    let res_b = state.mk_temp_bv(Sort::BitVec(size));
+    let rem = state.mk_temp_bv(Sort::BitVec(size));
+    let rem_lt = add_clauses_ult(state, &vec![rem.clone(), args[1].clone()]);
+    add_clauses_bv_mul_triple(state, &res, &args[1], &res_b, size);
+    add_clauses_bv_add_triple(state, &res_b, &rem, &args[0], size);
+    let ones = add_clauses_to_bv(state, (2 << size) - 1, size);
+    let zero = add_clauses_to_bv(state, 0, size);
+    let eq_zero = add_clauses_eq(state, &vec![args[1].clone(), zero]);
+    state.clauses.push(vec![
+        PropVar::new(rem_lt.owned_name(), 0, true),
+        PropVar::new(eq_zero.owned_name(), 0, true),
+    ]);
+    add_clauses_ite(state, &vec![eq_zero, ones, res])
+}
+
+fn add_clauses_bv_mul(state: &mut State, args: &Vec<BvVar>) -> BvVar {
+    let size = expect_all_bv_size(&args[..], 2, "bv-mul");
+    let res = state.mk_temp_bv(Sort::BitVec(size));
+    add_clauses_bv_mul_triple(state, &args[0], &args[1], &res, size);
+    res
+}
+
+// res = arg0 * arg1
+fn add_clauses_bv_mul_triple(state: &mut State, arg0: &BvVar, arg1: &BvVar, res: &BvVar, size: u128) {
+    let mut partial_products = Vec::new();
+    for i in 0..size {
+        let pp = state.mk_temp_bv(Sort::BitVec(size));
+        
+        for k in 0..size {
+            if k < i {
+                state.clauses.push(vec![PropVar::new(pp.owned_name(), k, false)]);
+            } else {
+                let j = k - i;
+                state.bulk_clause_push(vec![
+                    vec![(arg0, i, false), (arg1, j, false), (&pp, k, true)],
+                    vec![(arg0, i, true), (&pp, k, false)],
+                    vec![(arg1, j, true), (&pp, k, false)],
+                ]);
+            }
+        }
+        partial_products.push(pp);
+    }
+
+    let mut sum = partial_products[0].clone();
+    for i in 1 .. size {
+        let next_sum = state.mk_temp_bv(Sort::BitVec(size));
+        add_clauses_bv_add_triple(state, &sum, &partial_products[i as usize], &next_sum, size);
+        sum = next_sum;
+    }
+    
+    for i in 0 .. size {
+        state.bulk_clause_push(vec![
+            vec![(&res, i, true), (&sum, i, false)],
+            vec![(&res, i, false), (&sum, i, true)],
         ]);
     }
 }
