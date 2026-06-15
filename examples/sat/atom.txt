@@ -2,6 +2,6 @@
 (declare-bv-fun y 32)
 
 (assert (eq x (to-bv 42 32)))
-(assert (neq x y))
+(assert (ne x y))
 
 (assert (eq y (bv-sub (to-bv 42 32) x)))

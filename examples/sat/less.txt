@@ -1,0 +1,7 @@
+(declare-bv-fun x 32)
+(declare-bv-fun y 32)
+(declare-bv-fun z 32)
+
+(assert (eq x (to-bv 0 32)))
+(assert (ule y x))
+(assert (eq y (bv-add z (to-bv 23478 32))))
