@@ -102,6 +102,8 @@ fn add_clauses_fun_bvs(state: &mut State, name: String, args: &Vec<BvVar>) -> Bv
     match name.as_str() {
         "assert" => add_clauses_assert(state, args),
 
+        "ite" => add_clauses_ite(state, args),
+
         "eq" => add_clauses_eq(state, args),
         "ne" => add_clauses_ne(state, args),
 
@@ -114,6 +116,7 @@ fn add_clauses_fun_bvs(state: &mut State, name: String, args: &Vec<BvVar>) -> Bv
         "or" => add_clauses_or(state, args),
         "xor" => add_clauses_xor(state, args),
         "not" => add_clauses_not(state, args),
+        "implies" => add_clauses_implies(state, args),
 
         "bv-and" => add_clauses_bv_and(state, args),
         "bv-or" => add_clauses_bv_or(state, args),
@@ -137,8 +140,28 @@ fn add_clauses_assert(state: &mut State, args: &Vec<BvVar>) -> BvVar {
     temp
 }
 
+fn add_clauses_ite(state: &mut State, args: &Vec<BvVar>) -> BvVar {
+    // if bool arg is true -> set res to first arg, otherwise second arg
+    expect_vec_bv_size(&args[0..1], &vec![1], "ite");
+    let size = expect_all_bv_size(&args[1..], 2, "ite");
+    let res = state.mk_temp_bv(Sort::BitVec(size));
+    for i in 0 .. size {
+        state.bulk_clause_push(vec![
+            vec![(&args[0], 0, true), (&args[1], i, true), (&args[2], i, true), (&res, i, false)],
+            vec![(&args[0], 0, true), (&args[1], i, true), (&args[2], i, false), (&res, i, true)],
+            vec![(&args[0], 0, true), (&args[1], i, false), (&args[2], i, true), (&res, i, false)],
+            vec![(&args[0], 0, false), (&args[1], i, true), (&args[2], i, true), (&res, i, false)],
+            vec![(&args[0], 0, false), (&args[1], i, false), (&args[2], i, true), (&res, i, true)],
+            vec![(&args[0], 0, false), (&args[1], i, true), (&args[2], i, false), (&res, i, false)],
+            vec![(&args[0], 0, true), (&args[1], i, false), (&args[2], i, false), (&res, i, true)],
+            vec![(&args[0], 0, false), (&args[1], i, false), (&args[2], i, false), (&res, i, true)],
+        ]);
+    }
+    res
+}
+
 fn add_clauses_eq(state: &mut State, args: &Vec<BvVar>) -> BvVar {
-    let size = expect_all_bv_size(&args, 2, "eq");
+    let size = expect_all_bv_size(&args[..], 2, "eq");
     // stores equality for each bit
     let helper = state.mk_temp_bv(Sort::BitVec(size));
     let res = state.mk_temp_bv(Sort::BitVec(1));
@@ -167,7 +190,7 @@ fn add_clauses_eq(state: &mut State, args: &Vec<BvVar>) -> BvVar {
 }
 
 fn add_clauses_ne(state: &mut State, args: &Vec<BvVar>) -> BvVar {
-    expect_all_bv_size(&args, 2, "ne");
+    expect_all_bv_size(&args[..], 2, "ne");
     let eq_bv = add_clauses_eq(state, args);
     return add_clauses_not(state, &vec![eq_bv]);
 }
@@ -176,7 +199,7 @@ fn add_clauses_ult(state: &mut State, args: &Vec<BvVar>) -> BvVar {
     // goal here: build up current less than for each bit, propagating from
     // previous bit if they are the same and overriding on a difference; if
     // the last bit is turned on, arg 1 is less than arg 2
-    let size = expect_all_bv_size(&args, 2, "ult");
+    let size = expect_all_bv_size(&args[..], 2, "ult");
     let lt = state.mk_temp_bv(Sort::BitVec(size));
     for i in 0 .. size {
         if i == 0 {
@@ -208,26 +231,26 @@ fn add_clauses_ult(state: &mut State, args: &Vec<BvVar>) -> BvVar {
 }
 
 fn add_clauses_ule(state: &mut State, args: &Vec<BvVar>) -> BvVar {
-    expect_all_bv_size(&args, 2, "ule");
+    expect_all_bv_size(&args[..], 2, "ule");
     let lt = add_clauses_ult(state, args);
     let eq = add_clauses_eq(state, args);
     add_clauses_or(state, &vec![lt, eq])
 }
 
 fn add_clauses_ugt(state: &mut State, args: &Vec<BvVar>) -> BvVar {
-    let _ = expect_all_bv_size(&args, 2, "ugt");
+    let _ = expect_all_bv_size(&args[..], 2, "ugt");
     let le = add_clauses_ule(state, args);
     add_clauses_not(state, &vec![le])
 }
 
 fn add_clauses_uge(state: &mut State, args: &Vec<BvVar>) -> BvVar {
-    let _ = expect_all_bv_size(&args, 2, "uge");
+    let _ = expect_all_bv_size(&args[..], 2, "uge");
     let lt = add_clauses_ult(state, args);
     add_clauses_not(state, &vec![lt])
 }
 
 fn add_clauses_bv_add(state: &mut State, args: &Vec<BvVar>) -> BvVar {
-    let size = expect_all_bv_size(&args, 2, "bv-add");
+    let size = expect_all_bv_size(&args[..], 2, "bv-add");
     let sum = state.mk_temp_bv(Sort::BitVec(size));
     add_clauses_bv_add_triple(state, &args[0], &args[1], &sum, size);
     sum
@@ -235,7 +258,7 @@ fn add_clauses_bv_add(state: &mut State, args: &Vec<BvVar>) -> BvVar {
 
 fn add_clauses_bv_sub(state: &mut State, args: &Vec<BvVar>) -> BvVar {
     // a - b = c implies that c + b = a, under modular arithmetic
-    let size = expect_all_bv_size(&args, 2, "bv-sub");
+    let size = expect_all_bv_size(&args[..], 2, "bv-sub");
     let subt = state.mk_temp_bv(Sort::BitVec(size));
     add_clauses_bv_add_triple(state, &subt, &args[1], &args[0], size);
     subt
@@ -275,7 +298,7 @@ fn add_clauses_bv_add_triple(state: &mut State, arg0: &BvVar, arg1: &BvVar, sum:
 }
 
 fn add_clauses_bv_and(state: &mut State, args: &Vec<BvVar>) -> BvVar {
-    let size = expect_all_bv_size(&args, 2, "bv-and");
+    let size = expect_all_bv_size(&args[..], 2, "bv-and");
     let res = state.mk_temp_bv(Sort::BitVec(size));
     for i in 0 .. size {
         state.bulk_clause_push(vec![
@@ -299,7 +322,7 @@ fn add_clauses_and(state: &mut State, args: &Vec<BvVar>) -> BvVar {
 }
 
 fn add_clauses_bv_or(state: &mut State, args: &Vec<BvVar>) -> BvVar {
-    let size = expect_all_bv_size(&args, 2, "bv-or");
+    let size = expect_all_bv_size(&args[..], 2, "bv-or");
     let res = state.mk_temp_bv(Sort::BitVec(size));
     for i in 0 .. size {
         state.bulk_clause_push(vec![
@@ -322,8 +345,20 @@ fn add_clauses_or(state: &mut State, args: &Vec<BvVar>) -> BvVar {
     res
 }
 
+fn add_clauses_implies(state: &mut State, args: &Vec<BvVar>) -> BvVar {
+    expect_vec_bv_size(&args[..], &vec![1, 1], "implies");
+    let res = state.mk_temp_bv(Sort::BitVec(1));
+    state.bulk_clause_push(vec![
+        vec![(&args[0], 0, true), (&args[1], 0, true), (&res, 0, true)],
+        vec![(&args[0], 0, false), (&args[1], 0, true), (&res, 0, false)],
+        vec![(&args[0], 0, true), (&args[1], 0, false), (&res, 0, true)],
+        vec![(&args[0], 0, false), (&args[1], 0, false), (&res, 0, true)],
+    ]);
+    res
+}
+
 fn add_clauses_bv_xor(state: &mut State, args: &Vec<BvVar>) -> BvVar {
-    let size = expect_all_bv_size(&args, 2, "bv-xor");
+    let size = expect_all_bv_size(&args[..], 2, "bv-xor");
     let res = state.mk_temp_bv(Sort::BitVec(size));
     for i in 0 .. size {
         state.bulk_clause_push(vec![
@@ -349,7 +384,7 @@ fn add_clauses_xor(state: &mut State, args: &Vec<BvVar>) -> BvVar {
 }
 
 fn add_clauses_bv_nand(state: &mut State, args: &Vec<BvVar>) -> BvVar {
-    let size = expect_all_bv_size(&args, 2, "bv-nand");
+    let size = expect_all_bv_size(&args[..], 2, "bv-nand");
     let res = state.mk_temp_bv(Sort::BitVec(size));
     for i in 0 .. size {
         state.bulk_clause_push(vec![
@@ -362,7 +397,7 @@ fn add_clauses_bv_nand(state: &mut State, args: &Vec<BvVar>) -> BvVar {
 }
 
 fn add_clauses_bv_nor(state: &mut State, args: &Vec<BvVar>) -> BvVar {
-    let size = expect_all_bv_size(&args, 2, "bv-nor");
+    let size = expect_all_bv_size(&args[..], 2, "bv-nor");
     let res = state.mk_temp_bv(Sort::BitVec(size));
     for i in 0 .. size {
         state.bulk_clause_push(vec![
@@ -375,7 +410,7 @@ fn add_clauses_bv_nor(state: &mut State, args: &Vec<BvVar>) -> BvVar {
 }
 
 fn add_clauses_bv_xnor(state: &mut State, args: &Vec<BvVar>) -> BvVar {
-    let size = expect_all_bv_size(&args, 2, "bv-xnor");
+    let size = expect_all_bv_size(&args[..], 2, "bv-xnor");
     let res = state.mk_temp_bv(Sort::BitVec(size));
     for i in 0 .. size {
         state.bulk_clause_push(vec![
@@ -389,7 +424,7 @@ fn add_clauses_bv_xnor(state: &mut State, args: &Vec<BvVar>) -> BvVar {
 }
 
 fn add_clauses_bv_not(state: &mut State, args: &Vec<BvVar>) -> BvVar {
-    let size = expect_all_bv_size(&args, 1, "bv-not");
+    let size = expect_all_bv_size(&args[..], 1, "bv-not");
     let res = state.mk_temp_bv(Sort::BitVec(size));
     for i in 0 .. size {
         state.bulk_clause_push(vec![
@@ -449,7 +484,7 @@ fn get_int(expr: Expr, loc: &str) -> u128 {
 
 // we know a built-in needs the same size operands, ensure this is the case
 // and return the size if found, else panic
-fn expect_all_bv_size(lst: &Vec<BvVar>, len: usize, loc: &str) -> u128 {
+fn expect_all_bv_size(lst: &[BvVar], len: usize, loc: &str) -> u128 {
     let mut cur_size: Option<u128> = None;
     let die = || panic!("all arguments to {} must be of the same bit-width\n", loc);
 
