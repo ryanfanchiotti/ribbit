@@ -45,4 +45,4 @@ Arithmetic
 - `bv-add` (`A` `A`, returns `A`)
 - `bv-sub` (`A` `A`, returns `A`)
 - `bv-mul` (`A` `A`, returns `A`)
-- `bv-div` (`A` `A`, returns `A`)
+- `bv-udiv` (`A` `A`, returns `A`)
