@@ -12,8 +12,8 @@ pub type Clause = Vec<PropVar>;
 pub struct State {
     clauses: Vec<Clause>,
     vars: HashMap<String, BvVar>,
-    // map from uninterpreted function name to (usages, signature in bits)
-    fun_insts: HashMap<String, (Vec<String>, Vec<u128>)>,
+    // map from uninterpreted function name to (usages + result, signature in bits)
+    fun_insts: HashMap<String, (Vec<(Vec<BvVar>, BvVar)>, Vec<u128>)>,
 }
 
 impl State {
@@ -62,6 +62,7 @@ pub fn make_clauses(prog: Program) -> (Vec<Clause>, Vec<BvVar>) {
             panic!("one or more top level expressions doesn't return unit:\n{:?}", bv);
         }
     }
+    add_clauses_uninterpreted_fns(&mut state);
     (state.clauses, state.vars.into_values().collect())
 }
 
@@ -131,7 +132,7 @@ fn add_clauses_fun_bvs(state: &mut State, name: String, args: &Vec<BvVar>) -> Bv
         "bv-mul" => add_clauses_bv_mul(state, args),
         "bv-udiv" => add_clauses_bv_udiv(state, args),
 
-        _ => panic!("unknown function {}\n", name)
+        n => record_uninterpreted_fn(state, args, n), 
     }
 }
 
@@ -591,4 +592,45 @@ fn expect_vec_bv_size(lst: &[BvVar], sizes: &[u128], loc: &str) {
 
 fn get_bit(num: u128, n: u128) -> bool {
     ((num >> n) & 1) != 0
+}
+
+fn record_uninterpreted_fn(state: &mut State, args: &Vec<BvVar>, name: &str) -> BvVar {
+    // nasty stuff to avoid multiple mutable borrows. not very proud of this
+    let (_, sig) = state.fun_insts.get(name)
+        .expect(&format!("undefined function: {}\n", name));
+    let size = sig[sig.len() - 1];
+    let res = state.mk_temp_bv(Sort::BitVec(size));
+    let (inst_vec, sig) = state.fun_insts.get_mut(name)
+        .unwrap();
+    expect_vec_bv_size(&args[..], &sig[.. sig.len() - 1], name);
+    inst_vec.push((args.clone(), res.clone()));
+    res
+}
+
+fn add_clauses_uninterpreted_fns(state: &mut State) {
+    // for each uninterpreted function, we want to assert that
+    // x = y implies f(x) = f(y), and so on for more arguments
+    let fun_insts = state.fun_insts.clone();
+    for (_name, (insts, _sig)) in fun_insts {
+        for i in 0..insts.len() {
+            for j in i + 1..insts.len() {
+                let (args1, res1) = &insts[i];
+                let (args2, res2) = &insts[j];
+                let mut arg_eqs = Vec::new();
+                for k in 0..args1.len() {
+                    let eq = add_clauses_eq(state, &vec![args1[k].clone(), args2[k].clone()]);
+                    arg_eqs.push(eq);
+                }
+                let res_eq = add_clauses_eq(state, &vec![res1.clone(), res2.clone()]);
+                
+                let mut all_args_eq = arg_eqs[0].clone();
+                for k in 1..arg_eqs.len() {
+                    all_args_eq = add_clauses_and(state, &vec![all_args_eq, arg_eqs[k].clone()]);
+                }
+
+                let implication = add_clauses_implies(state, &vec![all_args_eq, res_eq]);
+                add_clauses_assert(state, &vec![implication]);
+            }
+        }
+    }
 }

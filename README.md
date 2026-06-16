@@ -1,12 +1,12 @@
 ## Ribbit
 
-Eager, bit-blasting toy SMT solver for quantifier free bit vectors. Input language is a simplified version of QF_BV and similar theories from SMT-LIB, as described below and seen in `/examples`. Mostly made for fun / learning purposes, hence the silly language. Uses Kissat as the underlying SMT solver, through the rustsat crate.
+Eager, bit-blasting toy SMT solver for quantifier free bit vectors. Input language is a simplified version of QF_BV and similar theories from SMT-LIB, as described below and seen in `/examples`. Mostly made for fun / learning purposes, hence the silly language. Uses Kissat as the underlying SAT solver, through the rustsat crate.
 
 Dependencies outside of Cargo:
 - Libclang, for bindgen
 
 #### Input language
-- For all of these, assume A is a generic bit-vector, and bool is a bit-vector of size 1 that can be made with to-bv
+- For all of these, assume `A` is a generic bit-vector, and `bool` is a bit-vector of size 1 that can be made with `to-bv`
 
 Declare uninterpreted functions (or constants)
 - `declare-bv-fun` (`identifier` `int+`, returns `unit`)

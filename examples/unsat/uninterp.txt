@@ -1,0 +1,6 @@
+(declare-bv-fun x 32)
+(declare-bv-fun y 32)
+(declare-bv-fun f 32 32 32)
+
+(assert (ne (f y x) (f x y)))
+(assert (eq x y))
