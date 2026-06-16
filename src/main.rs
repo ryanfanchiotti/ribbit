@@ -1,5 +1,5 @@
 mod syntax;
-mod check;
+mod blast;
 mod vars;
 mod sat;
 
@@ -7,7 +7,7 @@ use std::env::{args};
 use std::fs;
 use std::process::ExitCode;
 
-use crate::check::*;
+use crate::blast::*;
 use crate::sat::*;
 
 fn main() -> ExitCode {

@@ -1,7 +1,7 @@
 // convert clauses to rustsat input, and create models
 
 use crate::vars::*;
-use crate::check::*;
+use crate::blast::*;
 
 use std::collections::HashMap;
 
