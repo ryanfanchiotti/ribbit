@@ -132,6 +132,9 @@ fn add_clauses_fun_bvs(state: &mut State, name: String, args: &Vec<BvVar>) -> Bv
         "bv-mul" => add_clauses_bv_mul(state, args),
         "bv-udiv" => add_clauses_bv_udiv(state, args),
 
+        "bv-shl" => add_clauses_bv_shl(state, args),
+        "bv-shr" => add_clauses_bv_shr(state, args),
+
         n => record_uninterpreted_fn(state, args, n), 
     }
 }
@@ -525,6 +528,64 @@ fn add_clauses_to_bv(state: &mut State, num: u128, size: u128) -> BvVar {
     temp
 }
 
+fn add_clauses_shift_left(state: &mut State, start: &BvVar, size: u128, shift: u128) -> BvVar {
+    let res = state.mk_temp_bv(Sort::BitVec(size));
+    for i in 0 .. size {
+        if i >= shift {
+            let start_off = i - shift;
+            state.bulk_clause_push(vec![
+                vec![(&start, start_off, false), (&res, i, true)],
+                vec![(&start, start_off, true), (&res, i, false)],
+            ]);
+        } else {
+            state.bulk_clause_push(vec![
+                vec![(&res, i, false)],
+            ]);
+        }
+    }
+    res
+}
+
+fn add_clauses_shift_right(state: &mut State, start: &BvVar, size: u128, shift: u128) -> BvVar {
+    let res = state.mk_temp_bv(Sort::BitVec(size));
+    for i in 0 .. size {
+        if i + shift < size {
+            let start_off = i + shift;
+            state.bulk_clause_push(vec![
+                vec![(&start, start_off, false), (&res, i, true)],
+                vec![(&start, start_off, true), (&res, i, false)],
+            ]);
+        } else {
+            state.bulk_clause_push(vec![
+                vec![(&res, i, false)],
+            ]);
+        }
+    }
+    res
+}
+
+fn add_clauses_bv_shl(state: &mut State, args: &Vec<BvVar>) -> BvVar {
+    let size = expect_all_bv_size(&args[..], 2, "bv-shl");
+    add_clauses_bv_sh_both(state, true, &args[0], &args[1], size)
+}
+
+fn add_clauses_bv_shr(state: &mut State, args: &Vec<BvVar>) -> BvVar {
+    let size = expect_all_bv_size(&args[..], 2, "bv-shr");
+    add_clauses_bv_sh_both(state, false, &args[0], &args[1], size)
+}
+
+fn add_clauses_bv_sh_both(state: &mut State, left: bool, operand: &BvVar, shifter: &BvVar, size: u128) -> BvVar {
+    let mut res = add_clauses_to_bv(state, 0, size);
+    for i in 0 .. size {
+        let bv_i = add_clauses_to_bv(state, i, size);
+        let eq_i = add_clauses_eq(state, &vec![bv_i, shifter.clone()]);
+        let shift_i = if left {add_clauses_shift_left(state, operand, size, i)}
+                      else {add_clauses_shift_right(state, operand, size, i)};
+        res = add_clauses_ite(state, &vec![eq_i, shift_i, res])
+    }
+    res
+}
+
 fn add_clauses_decl_fun(state: &mut State, name: String, sig: Vec<u128>) -> BvVar {
     state.fun_insts.insert(name, (vec![], sig));
     state.mk_temp_bv(Sort::Unit)
@@ -612,8 +673,8 @@ fn add_clauses_uninterpreted_fns(state: &mut State) {
     // x = y implies f(x) = f(y), and so on for more arguments
     let fun_insts = state.fun_insts.clone();
     for (_name, (insts, _sig)) in fun_insts {
-        for i in 0..insts.len() {
-            for j in i + 1..insts.len() {
+        for i in 0 .. insts.len() {
+            for j in i + 1 .. insts.len() {
                 let (args1, res1) = &insts[i];
                 let (args2, res2) = &insts[j];
                 let mut arg_eqs = Vec::new();

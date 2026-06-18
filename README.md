@@ -7,6 +7,7 @@ Dependencies outside of Cargo:
 
 #### Input language
 - For all of these, assume `A` is a generic bit-vector, and `bool` is a bit-vector of size 1 that can be made with `to-bv`
+- Implicitly runs a satisfiability check after all assertions, and prints a model if a formula is satisfiable
 
 Declare uninterpreted functions (or constants)
 - `declare-bv-fun` (`identifier` `int+`, returns `unit`)
@@ -46,3 +47,7 @@ Arithmetic
 - `bv-sub` (`A` `A`, returns `A`)
 - `bv-mul` (`A` `A`, returns `A`)
 - `bv-udiv` (`A` `A`, returns `A`)
+
+Shifts
+- `bv-shl` (`A` `A`, returns `A`)
+- `bv-shr` (`A` `A`, returns `A`)
