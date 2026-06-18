@@ -1,0 +1,11 @@
+(declare-bv-fun x 32)
+(declare-bv-fun y 16)
+
+(assert (eq x (to-bv 50 32)))
+(assert (eq y (extract x 15 0)))
+
+(declare-bv-fun z 32)
+(declare-bv-fun q 16)
+
+(assert (eq z (concat q y)))
+(assert (eq q (zero-extend (to-bv 1 3) 16)))

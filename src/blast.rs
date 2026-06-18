@@ -1,5 +1,6 @@
 use crate::vars::*;
 use crate::syntax::*;
+use crate::sat::get_bits;
 
 use std::collections::HashMap;
 use std::fmt;
@@ -82,6 +83,14 @@ fn add_clauses_list(state: &mut State, lst: Vec<Expr>) -> BvVar {
         // const function -> normal variable
         [Expr::Var(n), Expr::Var(name), Expr::Int(size)] if *n == "declare-bv-fun".to_string() =>
             add_clauses_decl_var(state, name.clone(), *size),
+        [Expr::Var(n), e, Expr::Int(size)] if *n == "zero-extend".to_string() => {
+            let e1 = add_clauses_expr(state, e.clone());
+            add_clauses_zero_extend(state, &e1, *size)
+        },  
+        [Expr::Var(n), e, Expr::Int(upper), Expr::Int(lower)] if *n == "extract".to_string() => {
+            let e1 = add_clauses_expr(state, e.clone());
+            add_clauses_extract(state, &e1, *upper, *lower)
+        },
         [Expr::Var(n), Expr::Var(name), rest @ ..] if *n == "declare-bv-fun".to_string() =>
             add_clauses_decl_fun(
                 state,
@@ -135,8 +144,70 @@ fn add_clauses_fun_bvs(state: &mut State, name: String, args: &Vec<BvVar>) -> Bv
         "bv-shl" => add_clauses_bv_shl(state, args),
         "bv-shr" => add_clauses_bv_shr(state, args),
 
+        "concat" => add_clauses_concat(state, args),
+
         n => record_uninterpreted_fn(state, args, n), 
     }
+}
+
+fn add_clauses_zero_extend(state: &mut State, var: &BvVar, size: u128) -> BvVar {
+    let var_bits = get_bits(var.get_sort());
+    if size <= var_bits {
+        panic!("zero-extend: expected a size greater than size of var passed in")
+    }
+    let res = state.mk_temp_bv(Sort::BitVec(size));
+    for i in 0 .. size {
+        if i < var_bits {
+            state.bulk_clause_push(vec![
+                vec![(&var, i, false), (&res, i, true)],
+                vec![(&var, i, true), (&res, i, false)],
+            ]);
+        } else {
+            state.bulk_clause_push(vec![
+                vec![(&res, i, false)],
+            ]);
+        }
+    }
+    res
+}
+
+fn add_clauses_extract(state: &mut State, var: &BvVar, upper: u128, lower: u128) -> BvVar {
+    let var_bits = get_bits(var.get_sort());
+    if upper >= var_bits || upper < lower {
+        panic!("extract: expected `upper` (3rd arg) to be lt size of expr passed in, and gt `lower` (2nd arg)")
+    }
+    let res = state.mk_temp_bv(Sort::BitVec(upper - lower + 1));
+    for i in lower ..= upper {
+        state.bulk_clause_push(vec![
+            vec![(&var, i, false), (&res, i - lower, true)],
+            vec![(&var, i, true), (&res, i - lower, false)],
+        ]);
+    }
+    res
+}
+
+fn add_clauses_concat(state: &mut State, args: &Vec<BvVar>) -> BvVar {
+    if args.len() != 2 {
+        panic!("concat: expected two arguments")
+    }
+    let arg0 = &args[0];
+    let arg1 = &args[1];
+    let arg0_bits = get_bits(arg0.get_sort());
+    let arg1_bits = get_bits(arg1.get_sort());
+    let res = state.mk_temp_bv(Sort::BitVec(arg0_bits + arg1_bits));
+    for i in 0 .. arg1_bits {
+        state.bulk_clause_push(vec![
+            vec![(&arg1, i, false), (&res, i, true)],
+            vec![(&arg1, i, true), (&res, i, false)],
+        ]);
+    }
+    for i in 0 .. arg0_bits {
+        state.bulk_clause_push(vec![
+            vec![(&arg0, i, false), (&res, i + arg1_bits, true)],
+            vec![(&arg0, i, true), (&res, i + arg1_bits, false)],
+        ]);
+    }
+    res
 }
 
 fn add_clauses_assert(state: &mut State, args: &Vec<BvVar>) -> BvVar {

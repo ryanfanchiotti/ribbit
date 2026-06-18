@@ -76,7 +76,7 @@ fn print_model<T: Solve> (vars: &Vec<BvVar>, solver: &T, name_to_var: &HashMap<(
     }
 }
 
-fn get_bits(sort: &Sort) -> u128 {
+pub fn get_bits(sort: &Sort) -> u128 {
     match sort {
         Sort::Unit => 0,
         Sort::BitVec(n) => *n
