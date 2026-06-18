@@ -6,7 +6,7 @@ Dependencies outside of Cargo:
 - Libclang, for bindgen
 
 #### Input language
-- For all of these, assume `A` is a generic bit-vector, and `bool` is a bit-vector of size 1 that can be made with `to-bv`
+- For all of these, assume `A` and `B` are generic bit-vectors, and `bool` is a bit-vector of size 1 that can be made with `to-bv`
 - Implicitly runs a satisfiability check after all assertions, and prints a model if a formula is satisfiable
 
 Declare uninterpreted functions (or constants)
@@ -14,6 +14,11 @@ Declare uninterpreted functions (or constants)
 
 Assert that a statement is true
 - `assert` (`bool`, returns `unit`)
+
+Size manipulation
+- `zero-extend` (`A`, `int`, returns `bv, size: int`)
+- `extract` (`A`, `int (uppermost bit)`, `int (lowermost bit)` returns `bv, size: uppermost - lowermost + 1`)
+- `concat` (`A`, `B`, returns `bv, size: A.size + B.size`)
 
 If-then-else
 - `ite` (`bool` `A` `A`, returns `A`)
